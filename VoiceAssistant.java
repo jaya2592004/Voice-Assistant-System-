@@ -1,72 +1,55 @@
-import edu.cmu.sphinx.recognizer.Recognizer;
-import edu.cmu.sphinx.recognizer.RecognizerState;
-import edu.cmu.sphinx.util.props.ConfigurationManager;
-import edu.cmu.sphinx.frontend.util.Microphone;
-
-import java.io.File;
+import edu.cmu.sphinx.api.Configuration;
+import edu.cmu.sphinx.api.LiveSpeechRecognizer;
+import edu.cmu.sphinx.api.SpeechResult;
+import com.sun.speech.freetts.Voice;
+import com.sun.speech.freetts.VoiceManager;
 
 public class VoiceAssistant {
     public static void main(String[] args) {
         try {
-            ConfigurationManager cm = new ConfigurationManager(new File("config.xml").toURI().toURL());
-            Recognizer recognizer = (Recognizer) cm.lookup("recognizer");
-            recognizer.allocate();
+            // Configure Speech Recognition
+            Configuration config = new Configuration();
+            config.setAcousticModelPath("resource:/edu/cmu/sphinx/models/en-us/en-us");
+            config.setDictionaryPath("resource:/edu/cmu/sphinx/models/en-us/cmudict-en-us.dict");
+            config.setLanguageModelPath("resource:/edu/cmu/sphinx/models/en-us/en-us.lm.bin");
 
-            Microphone microphone = (Microphone) cm.lookup("microphone");
-            if (!microphone.startRecording()) {
-                System.out.println("Microphone is not working.");
-                return;
-            }
+            LiveSpeechRecognizer recognizer = new LiveSpeechRecognizer(config);
+            recognizer.startRecognition(true);
+            
+            System.out.println("Voice Assistant is listening... Say something!");
+            SpeechResult result;
 
-            System.out.println("Say a command: (e.g., 'hello')");
-            while (true) {
-                var result = recognizer.recognize();
-                if (result != null) {
-                    String speech = result.getBestFinalResultNoFiller().toLowerCase();
-                    System.out.println("You said: " + speech);
-                    processCommand(speech);
+            while ((result = recognizer.getResult()) != null) {
+                String command = result.getHypothesis();
+                System.out.println("You said: " + command);
+                
+                // Respond to commands
+                if (command.equalsIgnoreCase("hello")) {
+                    speak("Hello! How can I assist you?");
+                } else if (command.equalsIgnoreCase("what is the time")) {
+                    speak("The current time is " + java.time.LocalTime.now());
+                } else if (command.equalsIgnoreCase("exit")) {
+                    speak("Goodbye!");
+                    break;
                 } else {
-                    System.out.println("Could not understand, please try again.");
+                    speak("Sorry, I didn't understand that.");
                 }
             }
+            recognizer.stopRecognition();
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private static void processCommand(String command) {
-        if (command.contains("hello")) {
-            System.out.println("Hello! How can I assist you?");
-            speak("Hello! How can I assist you?");
-        } else if (command.contains("time")) {
-            String time = java.time.LocalTime.now().toString();
-            System.out.println("Current time is: " + time);
-            speak("The current time is " + time);
-        } else if (command.contains("exit")) {
-            System.out.println("Goodbye!");
-            speak("Goodbye!");
-            System.exit(0);
+    // Text-to-Speech Function
+    public static void speak(String text) {
+        Voice voice = VoiceManager.getInstance().getVoice("kevin16");
+        if (voice != null) {
+            voice.allocate();
+            voice.speak(text);
+            voice.deallocate();
         } else {
-            System.out.println("Command not recognized.");
-            speak("Sorry, I didn't understand that.");
+            System.out.println("Voice not found!");
         }
     }
-
-    private static void speak(String text) {
-        new Thread(() -> {
-            try {
-                com.sun.speech.freetts.Voice voice = com.sun.speech.freetts.VoiceManager.getInstance().getVoice("kevin16");
-                if (voice != null) {
-                    voice.allocate();
-                    voice.speak(text);
-                    voice.deallocate();
-                } else {
-                    System.out.println("Voice not available.");
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }).start();
-    }
 }
-
